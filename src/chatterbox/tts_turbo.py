@@ -223,6 +223,11 @@ class ChatterboxTurboTTS:
         if norm_loudness:
             s3gen_ref_wav = self.norm_loudness(s3gen_ref_wav, _sr)
 
+        # norm_loudness multiplies by a numpy float64 scalar, which upcasts the
+        # waveform to float64; force it back to float32 so the downstream convs
+        # don't raise "expected scalar type Float but found Double".
+        s3gen_ref_wav = s3gen_ref_wav.astype("float32")
+
         ref_16k_wav = librosa.resample(s3gen_ref_wav, orig_sr=S3GEN_SR, target_sr=S3_SR)
 
         s3gen_ref_wav = s3gen_ref_wav[:self.DEC_COND_LEN]
