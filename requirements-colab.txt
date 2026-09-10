@@ -1,0 +1,14 @@
+# Colab already ships a CUDA build of torch/torchaudio + numpy — do NOT reinstall them
+# (pinning torch==2.7.1 / numpy<1.26 here fights the base image and wastes ~3 min).
+# If something breaks on import, fall back to the full pinned set: pip install -r requirements.txt
+librosa==0.11.0
+s3tokenizer
+transformers==4.46.3
+diffusers==0.29.0
+resemble-perth==1.0.1
+conformer==0.3.2
+safetensors==0.5.3
+pykakasi==2.3.0
+gradio==5.44.1
+pyloudnorm
+omegaconf
