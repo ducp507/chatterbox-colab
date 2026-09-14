@@ -390,3 +390,63 @@ def create_turbo_tab():
         "btn_laugh": btn_laugh
     }
 
+
+
+def create_script_tab():
+    """Create the UI for reading a pre-split script (one line = one spoken chunk)."""
+    with gr.Row():
+        with gr.Column():
+            gr.Markdown("""
+            ### 📜 Script Reader
+            Read a script that's already split into short lines — each line becomes
+            one clip, with a silence gap inserted between lines so it sounds like
+            paced narration instead of one run-on paragraph.
+            """)
+
+            script_text_input = gr.Textbox(
+                label="Script (one sentence per line)",
+                lines=12,
+                placeholder="James left for Cambodia...\nDiep found out she was pregnant.\nShe had to face it alone.",
+            )
+
+            script_file_input = gr.File(
+                label="...or upload a file instead (.txt / .csv: one line per row · .xlsx: first column)",
+                file_types=[".txt", ".csv", ".xlsx", ".xlsm"],
+            )
+
+            voice_select_script = gr.Dropdown(
+                label="Select Voice",
+                choices=get_voices_for_language("en"),
+                info="Same voice library as the other tabs (e.g. Male-1)"
+            )
+
+            pause_slider_script = gr.Slider(
+                label="Pause between lines (ms)",
+                minimum=0, maximum=2000, value=500, step=50
+            )
+
+            generate_btn_script = gr.Button("📜 Generate Script", variant="primary", size="lg")
+
+        with gr.Column():
+            progress_bar_script = gr.Slider(label="Progress", minimum=0, maximum=100, value=0, interactive=False)
+            status_box_script = gr.Textbox(label="Status", value="Ready to generate...", lines=4, interactive=False)
+            audio_output_script = gr.Audio(label="Generated Audio", autoplay=True, show_download_button=True)
+
+            gr.Markdown("""
+            ### 💡 Notes
+            - Uploaded file takes priority over the pasted text box.
+            - Each line is sent to Turbo as-is (no re-chunking) so pauses land exactly
+              where you split the script.
+            - Uses the Turbo model — same voice library, same 5s+ reference requirement.
+            """)
+
+    return {
+        "script_text": script_text_input,
+        "script_file": script_file_input,
+        "voice_select": voice_select_script,
+        "pause_slider": pause_slider_script,
+        "generate_btn": generate_btn_script,
+        "progress_bar": progress_bar_script,
+        "status_box": status_box_script,
+        "audio_output": audio_output_script,
+    }

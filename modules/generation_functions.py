@@ -1,6 +1,7 @@
 """
 Speech generation, conversion, and utility functions for Chatterbox TTS Enhanced
 """
+import os
 import random
 import numpy as np
 import torch
@@ -419,3 +420,92 @@ def generate_turbo_speech(text, voice_name):
         error_status = f"❌ Error generating speech: {str(e)}"
         yield 0, None, error_status
 
+
+
+def _extract_script_lines(script_text, script_file):
+    """Turn a pasted textbox and/or uploaded .txt/.csv/.xlsx into a flat list
+    of non-empty lines, in that order. An uploaded file takes priority over
+    the textbox. Each line/row is treated as ONE spoken chunk — nothing here
+    re-chunks it, so the pause you set lands exactly where the script was
+    split, instead of Chatterbox's own sentence-guessing."""
+    if script_file:
+        path = script_file if isinstance(script_file, str) else getattr(script_file, "name", None)
+        if not path or not os.path.exists(path):
+            return []
+        ext = os.path.splitext(path)[1].lower()
+        if ext in (".xlsx", ".xlsm"):
+            import openpyxl
+            wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+            ws = wb.active
+            skip_headers = {"text", "line", "script", "kịch bản", "dòng", "câu", "content"}
+            lines = []
+            for row in ws.iter_rows(values_only=True):
+                cell = row[0] if row else None
+                if cell is None:
+                    continue
+                text = str(cell).strip()
+                if text and text.lower() not in skip_headers:
+                    lines.append(text)
+            return lines
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            return [ln.strip() for ln in f if ln.strip()]
+
+    if script_text and script_text.strip():
+        return [ln.strip() for ln in script_text.splitlines() if ln.strip()]
+
+    return []
+
+
+def generate_script_speech(script_text, script_file, voice_name, pause_ms):
+    """Read a pre-split script line by line with the Turbo model, inserting a
+    silence gap between lines so it sounds like paced narration instead of
+    one run-on paragraph."""
+    try:
+        start_time = time.time()
+
+        lines = _extract_script_lines(script_text, script_file)
+        if not lines:
+            yield 0, None, "❌ Error: No lines found. Paste text (one sentence per line) or upload a .txt/.csv/.xlsx file."
+            return
+
+        if not voice_name or voice_name == "None":
+            yield 0, None, "❌ Error: Please select a voice for the script."
+            return
+
+        audio_prompt_path = resolve_voice_path(voice_name, "en")
+        if not audio_prompt_path:
+            yield 0, None, f"❌ Error: Voice '{voice_name}' not found."
+            return
+
+        yield 5, None, f"Loading Turbo model... ({len(lines)} lines found)"
+        model = model_manager.get_turbo_model()
+        if model is None:
+            yield 0, None, "❌ Error: Failed to load Turbo model."
+            return
+
+        pause_sec = max(0, pause_ms) / 1000.0
+        silence = torch.zeros(1, int(model.sr * pause_sec))
+
+        total = len(lines)
+        pieces = []
+        for i, line in enumerate(lines):
+            progress = 10 + int((i / total) * 80)
+            preview = line if len(line) <= 60 else line[:57] + "..."
+            yield progress, None, f"Line {i + 1}/{total}: {preview}"
+            wav = model.generate(line, audio_prompt_path=audio_prompt_path)
+            pieces.append(wav)
+            if i < total - 1:
+                pieces.append(silence)
+
+        yield 95, None, "Finalizing audio..."
+        full_wav = torch.cat(pieces, dim=-1)
+
+        total_time = time.time() - start_time
+        status = (
+            f"✅ Generation complete!\nTime taken: {format_time(total_time)}\n"
+            f"Lines: {total} | Pause between lines: {pause_ms}ms"
+        )
+        yield 100, (model.sr, full_wav.squeeze(0).numpy()), status
+
+    except Exception as e:
+        yield 0, None, f"❌ Error generating speech: {str(e)}"

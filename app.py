@@ -28,7 +28,8 @@ from modules.generation_functions import (
     generate_speech,
     generate_multilingual_speech,
     convert_voice,
-    generate_turbo_speech
+    generate_turbo_speech,
+    generate_script_speech
 )
 
 # Import UI components
@@ -38,7 +39,8 @@ from modules.ui_components import (
     create_multilingual_tab,
     create_voice_conversion_tab,
     create_clone_voice_tab,
-    create_turbo_tab
+    create_turbo_tab,
+    create_script_tab
 )
 
 # Load voices at startup
@@ -101,7 +103,10 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
     
     with gr.Tab("🧬 Clone Voice"):
         clone_components = create_clone_voice_tab()
-    
+
+    with gr.Tab("📜 Script Reader"):
+        script_components = create_script_tab()
+
     # ---------------------------
     # Event Handlers - TTS Tab
     # ---------------------------
@@ -339,7 +344,25 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
         inputs=[vc_components['target_voice_select']],
         outputs=[vc_components['preview_audio']]
     )
-    
+
+    # ---------------------------
+    # Event Handlers - Script Reader Tab
+    # ---------------------------
+    script_components['generate_btn'].click(
+        fn=generate_script_speech,
+        inputs=[
+            script_components['script_text'],
+            script_components['script_file'],
+            script_components['voice_select'],
+            script_components['pause_slider']
+        ],
+        outputs=[
+            script_components['progress_bar'],
+            script_components['audio_output'],
+            script_components['status_box']
+        ]
+    )
+
     # ---------------------------
     # Event Handlers - Clone Voice Tab
     # ---------------------------
@@ -359,6 +382,9 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
     ).then(
         fn=lambda: gr.update(choices=get_voices_for_language("en")),
         outputs=[turbo_components['voice_select']]
+    ).then(
+        fn=lambda: gr.update(choices=get_voices_for_language("en")),
+        outputs=[script_components['voice_select']]
     ).then(
         fn=lambda lang: gr.update(choices=get_voices_for_language(lang)),
         inputs=[mtl_components['language_select']],
@@ -385,6 +411,9 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
     ).then(
         fn=lambda: gr.update(choices=get_voices_for_language("en")),
         outputs=[turbo_components['voice_select']]
+    ).then(
+        fn=lambda: gr.update(choices=get_voices_for_language("en")),
+        outputs=[script_components['voice_select']]
     ).then(
         fn=lambda lang: gr.update(choices=get_voices_for_language(lang)),
         inputs=[mtl_components['language_select']],
