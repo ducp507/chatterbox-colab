@@ -29,7 +29,7 @@ from modules.generation_functions import (
     generate_multilingual_speech,
     convert_voice,
     generate_turbo_speech,
-    generate_script_speech
+    generate_script_to_voice
 )
 
 # Import UI components
@@ -40,7 +40,7 @@ from modules.ui_components import (
     create_voice_conversion_tab,
     create_clone_voice_tab,
     create_turbo_tab,
-    create_script_tab
+    create_script_to_voice_tab
 )
 
 # Load voices at startup
@@ -104,8 +104,8 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
     with gr.Tab("🧬 Clone Voice"):
         clone_components = create_clone_voice_tab()
 
-    with gr.Tab("📜 Script Reader"):
-        script_components = create_script_tab()
+    with gr.Tab("🎬 Script to Voice"):
+        script_components = create_script_to_voice_tab()
 
     # ---------------------------
     # Event Handlers - TTS Tab
@@ -346,15 +346,17 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
     )
 
     # ---------------------------
-    # Event Handlers - Script Reader Tab
+    # Event Handlers - Script to Voice Tab
     # ---------------------------
     script_components['generate_btn'].click(
-        fn=generate_script_speech,
+        fn=generate_script_to_voice,
         inputs=[
             script_components['script_text'],
             script_components['script_file'],
             script_components['voice_select'],
-            script_components['pause_slider']
+            script_components['pause_slider'],
+            script_components['max_chars'],
+            script_components['master_checkbox']
         ],
         outputs=[
             script_components['progress_bar'],

@@ -456,20 +456,85 @@ def _extract_script_lines(script_text, script_file):
     return []
 
 
-def generate_script_speech(script_text, script_file, voice_name, pause_ms):
-    """Read a pre-split script line by line with the Turbo model, inserting a
-    silence gap between lines so it sounds like paced narration instead of
-    one run-on paragraph."""
+
+
+_SENT_END = re.compile(r'(?<=[.!?。！？।؟])\s+')
+_SOFT_BREAK = re.compile(r'[,;，、；،]\s*')
+
+
+def _split_block_by_chars(block, max_chars):
+    """Split ONE paragraph/line into <= max_chars pieces: prefer sentence
+    boundaries (. ! ?), fall back to commas/semicolons only if a single
+    sentence itself exceeds the limit, and never break mid-word if a natural
+    boundary exists. Mirrors the 'Script Splitter' Gemini tool's rule set."""
+    block = block.strip()
+    if not block:
+        return []
+    if len(block) <= max_chars:
+        return [block]
+
+    sentences = [s for s in _SENT_END.split(block) if s.strip()]
+    pieces = []
+    current = ""
+    for sent in sentences:
+        candidate = f"{current} {sent}".strip() if current else sent
+        if len(candidate) <= max_chars:
+            current = candidate
+            continue
+        if current:
+            pieces.append(current)
+            current = ""
+        if len(sent) <= max_chars:
+            current = sent
+            continue
+        # A single sentence longer than max_chars -> split on , ; as fallback
+        for part in _SOFT_BREAK.split(sent):
+            part = part.strip()
+            if not part:
+                continue
+            candidate = f"{current} {part}".strip() if current else part
+            if len(candidate) <= max_chars:
+                current = candidate
+            else:
+                if current:
+                    pieces.append(current)
+                # last resort: the fragment itself is still too long
+                current = part[:max_chars] if len(part) > max_chars else part
+    if current:
+        pieces.append(current)
+    return pieces
+
+
+def split_script(full_text, max_chars=600):
+    """Split a full script into TTS-ready segments. Existing newlines are
+    treated as the author's own hard breaks and are never merged across;
+    any single line still longer than max_chars gets auto-split at
+    sentence/comma boundaries, like the Gemini 'Script Splitter' tool."""
+    segments = []
+    for block in (full_text or "").splitlines():
+        segments.extend(_split_block_by_chars(block, max_chars))
+    return segments
+
+
+def generate_script_to_voice(full_script, script_file, voice_name, pause_ms, max_chars, apply_mastering):
+    """Full pipeline: paste a raw script -> auto-split into segments ->
+    Turbo-generate each segment -> merge with a silence gap between segments
+    -> (optionally) master the merged file with the real Audacity engine
+    (Compressor -> Normalize -> Filter Curve EQ, per 'Edit voice.docx')."""
     try:
         start_time = time.time()
 
-        lines = _extract_script_lines(script_text, script_file)
-        if not lines:
-            yield 0, None, "❌ Error: No lines found. Paste text (one sentence per line) or upload a .txt/.csv/.xlsx file."
+        if script_file:
+            lines = _extract_script_lines(None, script_file)
+            full_script = "\n".join(lines)
+
+        segments = split_script(full_script, max_chars=int(max_chars or 600))
+        if not segments:
+            yield 0, None, "❌ Error: No text found. Paste a script or upload a .txt/.csv/.xlsx file."
             return
 
         if not voice_name or voice_name == "None":
-            yield 0, None, "❌ Error: Please select a voice for the script."
+            yield 0, None, "❌ Error: Please select a voice."
             return
 
         audio_prompt_path = resolve_voice_path(voice_name, "en")
@@ -477,7 +542,7 @@ def generate_script_speech(script_text, script_file, voice_name, pause_ms):
             yield 0, None, f"❌ Error: Voice '{voice_name}' not found."
             return
 
-        yield 5, None, f"Loading Turbo model... ({len(lines)} lines found)"
+        yield 5, None, f"Loading Turbo model... ({len(segments)} segments after auto-split)"
         model = model_manager.get_turbo_model()
         if model is None:
             yield 0, None, "❌ Error: Failed to load Turbo model."
@@ -486,26 +551,56 @@ def generate_script_speech(script_text, script_file, voice_name, pause_ms):
         pause_sec = max(0, pause_ms) / 1000.0
         silence = torch.zeros(1, int(model.sr * pause_sec))
 
-        total = len(lines)
+        total = len(segments)
         pieces = []
-        for i, line in enumerate(lines):
-            progress = 10 + int((i / total) * 80)
-            preview = line if len(line) <= 60 else line[:57] + "..."
-            yield progress, None, f"Line {i + 1}/{total}: {preview}"
-            wav = model.generate(line, audio_prompt_path=audio_prompt_path)
+        for i, seg in enumerate(segments):
+            progress = 5 + int((i / total) * 65)
+            preview = seg if len(seg) <= 60 else seg[:57] + "..."
+            yield progress, None, f"Segment {i + 1}/{total} ({len(seg)} chars): {preview}"
+            wav = model.generate(seg, audio_prompt_path=audio_prompt_path)
             pieces.append(wav)
             if i < total - 1:
                 pieces.append(silence)
 
-        yield 95, None, "Finalizing audio..."
+        yield 72, None, "Merging segments..."
         full_wav = torch.cat(pieces, dim=-1)
+        sr = model.sr
 
+        if not apply_mastering:
+            total_time = time.time() - start_time
+            status = f"✅ Done (mastering off)!\n{total} segments | {format_time(total_time)}"
+            yield 100, (sr, full_wav.squeeze(0).numpy()), status
+            return
+
+        yield 78, None, "Mastering with real Audacity (Compressor → Normalize → EQ)... first run this session installs Audacity (~1 min)"
+        import soundfile as sf
+        import tempfile
+        from . import audacity_bridge
+
+        tmp_dir = tempfile.mkdtemp(prefix="chatterbox_master_")
+        in_path = os.path.join(tmp_dir, "merged.wav")
+        out_path = os.path.join(tmp_dir, "mastered.wav")
+        sf.write(in_path, full_wav.squeeze(0).numpy(), sr)
+
+        try:
+            audacity_bridge.apply_master_chain(in_path, out_path)
+        except Exception as e:
+            total_time = time.time() - start_time
+            status = (
+                f"⚠️ Mastering failed — returning the UN-mastered voice instead.\n"
+                f"{total} segments | {format_time(total_time)}\n\n{e}"
+            )
+            yield 100, (sr, full_wav.squeeze(0).numpy()), status
+            return
+
+        mastered_wav, mastered_sr = sf.read(out_path, dtype="float32")
         total_time = time.time() - start_time
         status = (
-            f"✅ Generation complete!\nTime taken: {format_time(total_time)}\n"
-            f"Lines: {total} | Pause between lines: {pause_ms}ms"
+            f"✅ Generation + real-Audacity mastering complete!\n"
+            f"{total} segments | {format_time(total_time)}\n"
+            f"Chain: Compressor(-15dB, 2:1) → Normalize(-1dB) → Filter Curve EQ"
         )
-        yield 100, (model.sr, full_wav.squeeze(0).numpy()), status
+        yield 100, (mastered_sr, mastered_wav), status
 
     except Exception as e:
-        yield 0, None, f"❌ Error generating speech: {str(e)}"
+        yield 0, None, f"❌ Error: {str(e)}"

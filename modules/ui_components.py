@@ -392,61 +392,78 @@ def create_turbo_tab():
 
 
 
-def create_script_tab():
-    """Create the UI for reading a pre-split script (one line = one spoken chunk)."""
+
+
+def create_script_to_voice_tab():
+    """Create the UI for the full pipeline: paste a raw script -> auto-split
+    -> Turbo voice per segment -> merge -> master with the real Audacity
+    engine (Compressor -> Normalize -> Filter Curve EQ, per Edit voice.docx)."""
     with gr.Row():
         with gr.Column():
             gr.Markdown("""
-            ### 📜 Script Reader
-            Read a script that's already split into short lines — each line becomes
-            one clip, with a silence gap inserted between lines so it sounds like
-            paced narration instead of one run-on paragraph.
+            ### 🎬 Script to Voice
+            Dán **nguyên kịch bản** (chưa cần tách dòng) — tool tự tách theo câu,
+            tự tạo giọng từng đoạn, tự nối lại, và tự chuẩn hoá bằng **Audacity thật**
+            (đúng chain Compressor → Normalize → EQ, cùng thông số Anh Tấn dùng).
             """)
 
-            script_text_input = gr.Textbox(
-                label="Script (one sentence per line)",
-                lines=12,
-                placeholder="James left for Cambodia...\nDiep found out she was pregnant.\nShe had to face it alone.",
+            script_input = gr.Textbox(
+                label="Full script",
+                lines=14,
+                placeholder="Diep was twenty six years old, orphaned young...",
             )
 
-            script_file_input = gr.File(
-                label="...or upload a file instead (.txt / .csv: one line per row · .xlsx: first column)",
+            script_file_input_s2v = gr.File(
+                label="...hoặc upload file (.txt / .csv: mỗi dòng 1 câu · .xlsx: cột đầu tiên)",
                 file_types=[".txt", ".csv", ".xlsx", ".xlsm"],
             )
 
-            voice_select_script = gr.Dropdown(
-                label="Select Voice",
+            with gr.Row():
+                max_chars_slider = gr.Slider(
+                    label="Giới hạn ký tự / đoạn", minimum=200, maximum=1500,
+                    value=600, step=50
+                )
+                pause_slider_s2v = gr.Slider(
+                    label="Khoảng lặng giữa đoạn (ms)", minimum=0, maximum=2000,
+                    value=500, step=50
+                )
+
+            voice_select_s2v = gr.Dropdown(
+                label="Chọn giọng",
                 choices=get_voices_for_language("en"),
-                info="Same voice library as the other tabs (e.g. Male-1)"
             )
 
-            pause_slider_script = gr.Slider(
-                label="Pause between lines (ms)",
-                minimum=0, maximum=2000, value=500, step=50
+            master_checkbox = gr.Checkbox(
+                label="Chuẩn hoá bằng Audacity thật (Compressor → Normalize → EQ)",
+                value=True,
+                info="Lần đầu trong phiên Colab sẽ mất thêm ~1 phút để cài Audacity headless"
             )
 
-            generate_btn_script = gr.Button("📜 Generate Script", variant="primary", size="lg")
+            generate_btn_s2v = gr.Button("🎬 Generate Script to Voice", variant="primary", size="lg")
 
         with gr.Column():
-            progress_bar_script = gr.Slider(label="Progress", minimum=0, maximum=100, value=0, interactive=False)
-            status_box_script = gr.Textbox(label="Status", value="Ready to generate...", lines=4, interactive=False)
-            audio_output_script = gr.Audio(label="Generated Audio", autoplay=True, show_download_button=True)
+            progress_bar_s2v = gr.Slider(label="Progress", minimum=0, maximum=100, value=0, interactive=False)
+            status_box_s2v = gr.Textbox(label="Status", value="Ready to generate...", lines=8, interactive=False)
+            audio_output_s2v = gr.Audio(label="Generated Audio", autoplay=True, show_download_button=True)
 
             gr.Markdown("""
             ### 💡 Notes
-            - Uploaded file takes priority over the pasted text box.
-            - Each line is sent to Turbo as-is (no re-chunking) so pauses land exactly
-              where you split the script.
-            - Uses the Turbo model — same voice library, same 5s+ reference requirement.
+            - Xuống dòng có sẵn trong script = ranh giới cứng, không bị gộp lại; đoạn nào
+              dài hơn giới hạn ký tự mới tự tách tiếp theo câu/dấu phẩy (giống Script Splitter).
+            - Tắt ô "Chuẩn hoá bằng Audacity" để nghe bản giọng thô trước, so sánh sau.
+            - Nếu bước mastering lỗi, tool trả về bản giọng thô kèm lỗi chi tiết trong Status
+              (dán lỗi đó lại để vá tiếp).
             """)
 
     return {
-        "script_text": script_text_input,
-        "script_file": script_file_input,
-        "voice_select": voice_select_script,
-        "pause_slider": pause_slider_script,
-        "generate_btn": generate_btn_script,
-        "progress_bar": progress_bar_script,
-        "status_box": status_box_script,
-        "audio_output": audio_output_script,
+        "script_text": script_input,
+        "script_file": script_file_input_s2v,
+        "max_chars": max_chars_slider,
+        "pause_slider": pause_slider_s2v,
+        "voice_select": voice_select_s2v,
+        "master_checkbox": master_checkbox,
+        "generate_btn": generate_btn_s2v,
+        "progress_bar": progress_bar_s2v,
+        "status_box": status_box_s2v,
+        "audio_output": audio_output_s2v,
     }
