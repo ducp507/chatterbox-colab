@@ -468,3 +468,77 @@ def create_script_to_voice_tab():
         "status_box": status_box_s2v,
         "audio_output": audio_output_s2v,
     }
+
+
+def create_script_to_prompts_tab():
+    """Create the UI for turning a script into N per-scene English image
+    prompts via the Gemini API (google-genai), for pasting into Google Flow."""
+    with gr.Row():
+        with gr.Column():
+            gr.Markdown("""
+            ### 🖼️ Script to Prompts
+            Dán kịch bản → Gemini tự viết prompt ảnh tiếng Anh cho từng phân cảnh
+            (8 giây/cảnh), theo đúng bộ rule đã lưu. Dán từng prompt ra vào
+            Google Flow để tạo ảnh (bước này vẫn làm tay).
+            """)
+
+            script_input_prompts = gr.Textbox(
+                label="Full script",
+                lines=14,
+                placeholder="Diep was twenty six years old, orphaned young...",
+            )
+
+            script_file_input_prompts = gr.File(
+                label="...hoặc upload file (.txt / .csv / .xlsx)",
+                file_types=[".txt", ".csv", ".xlsx", ".xlsm"],
+            )
+
+            with gr.Row():
+                video_length_input = gr.Number(
+                    label="Độ dài video (giây)", value=1200, precision=0,
+                    info="150 cảnh × 8s ≈ 1200s (20 phút)"
+                )
+                num_scenes_input = gr.Number(
+                    label="Số phân cảnh (để trống = tự tính = độ dài / 8s)",
+                    precision=0,
+                )
+
+            api_key_input = gr.Textbox(
+                label="Gemini API Key",
+                type="password",
+                placeholder="Lấy free tại aistudio.google.com/apikey",
+                info="Hoặc để trống nếu đã set biến môi trường GEMINI_API_KEY"
+            )
+
+            generate_btn_prompts = gr.Button("🖼️ Generate Prompts", variant="primary", size="lg")
+
+        with gr.Column():
+            progress_bar_prompts = gr.Slider(label="Progress", minimum=0, maximum=100, value=0, interactive=False)
+            status_box_prompts = gr.Textbox(
+                label="Prompts (đánh số, copy dán từng cái vào Flow)",
+                value="Ready to generate...", lines=20, interactive=False, show_copy_button=True,
+            )
+            prompts_file_output = gr.File(label="Tải file .txt")
+
+            gr.Markdown("""
+            ### 💡 Notes
+            - Miễn phí — chỉ dùng phần text của Gemini API, không đụng tới
+              ảnh/video nên không tốn credit trả phí.
+            - Xử lý theo từng đợt 30 prompt/lần trong 1 phiên chat, để Gemini
+              nhớ được đã viết tới đâu, không lặp/không bỏ sót nội dung script.
+            - Nhân vật không được mô tả ngoại hình trong prompt (vì bạn đã có
+              sẵn ảnh tham chiếu riêng) — nhớ đính kèm đúng ảnh tham chiếu khi
+              dán prompt vào Flow.
+            """)
+
+    return {
+        "script_text": script_input_prompts,
+        "script_file": script_file_input_prompts,
+        "video_length": video_length_input,
+        "num_scenes": num_scenes_input,
+        "api_key": api_key_input,
+        "generate_btn": generate_btn_prompts,
+        "progress_bar": progress_bar_prompts,
+        "status_box": status_box_prompts,
+        "prompts_file": prompts_file_output,
+    }

@@ -31,6 +31,7 @@ from modules.generation_functions import (
     generate_turbo_speech,
     generate_script_to_voice
 )
+from modules.scene_prompts import generate_scene_prompts
 
 # Import UI components
 from modules.ui_components import (
@@ -40,7 +41,8 @@ from modules.ui_components import (
     create_voice_conversion_tab,
     create_clone_voice_tab,
     create_turbo_tab,
-    create_script_to_voice_tab
+    create_script_to_voice_tab,
+    create_script_to_prompts_tab
 )
 
 # Load voices at startup
@@ -106,6 +108,9 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
 
     with gr.Tab("🎬 Script to Voice"):
         script_components = create_script_to_voice_tab()
+
+    with gr.Tab("🖼️ Script to Prompts"):
+        prompts_components = create_script_to_prompts_tab()
 
     # ---------------------------
     # Event Handlers - TTS Tab
@@ -362,6 +367,25 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
             script_components['progress_bar'],
             script_components['audio_output'],
             script_components['status_box']
+        ]
+    )
+
+    # ---------------------------
+    # Event Handlers - Script to Prompts Tab
+    # ---------------------------
+    prompts_components['generate_btn'].click(
+        fn=generate_scene_prompts,
+        inputs=[
+            prompts_components['script_text'],
+            prompts_components['script_file'],
+            prompts_components['video_length'],
+            prompts_components['num_scenes'],
+            prompts_components['api_key']
+        ],
+        outputs=[
+            prompts_components['progress_bar'],
+            prompts_components['status_box'],
+            prompts_components['prompts_file']
         ]
     )
 

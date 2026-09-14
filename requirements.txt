@@ -14,3 +14,4 @@ pyloudnorm
 omegaconf
 openpyxl
 scipy
+google-genai
