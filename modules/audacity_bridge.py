@@ -66,6 +66,25 @@ def _ensure_installed():
     )
 
 
+def _dump_scripting_config():
+    """After Audacity has run at least once, it writes its OWN real config
+    to disk with whatever key names *this* version actually uses. Read that
+    back instead of guessing further — any line mentioning 'script' (case-
+    insensitive) is exactly what needs to be flipped to enable the pipe."""
+    hits = []
+    for cfg_dir in (AUDACITY_CFG_DIR, os.path.expanduser("~/.config/audacity")):
+        cfg_path = os.path.join(cfg_dir, "audacity.cfg")
+        if not os.path.exists(cfg_path):
+            continue
+        try:
+            for line in open(cfg_path, encoding="utf-8", errors="ignore"):
+                if "script" in line.lower():
+                    hits.append(f"{cfg_path}: {line.strip()}")
+        except Exception as e:
+            hits.append(f"{cfg_path}: (couldn't read: {e})")
+    return "\n".join(hits) if hits else "(no 'script' line found in either audacity.cfg — file may not exist yet, or this version doesn't call it that)"
+
+
 def _pkg_version():
     try:
         out = subprocess.run(
@@ -196,12 +215,14 @@ def _ensure_running():
             pass
         windows = _list_windows()
         shot = _debug_screenshot()
+        cfg_dump = _dump_scripting_config()
         if not proc_alive:
             _state["proc"].kill()
         raise RuntimeError(
             "Audacity's scripting pipe never appeared within 90s.\n"
             f"Process still running: {proc_alive} | installed version: {_pkg_version()}\n"
             f"Open windows on the virtual display: {windows}\n"
+            f"'script' lines in Audacity's own config files:\n{cfg_dump}\n"
             + (f"Screenshot saved to: {shot} — open it in Colab's file browser "
                "(folder icon, left sidebar) and send it over.\n"
                if shot else "Screenshot capture failed too.\n")
