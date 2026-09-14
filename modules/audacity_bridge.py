@@ -58,10 +58,10 @@ LAUNCH_LOG = "/tmp/audacity_launch.log"
 
 
 def _ensure_installed():
-    if shutil.which("audacity") and shutil.which("xdotool"):
+    if shutil.which("audacity") and shutil.which("xdotool") and shutil.which("import"):
         return
     subprocess.run(
-        "apt-get -qq update && apt-get install -y -qq audacity xvfb xdotool",
+        "apt-get -qq update && apt-get install -y -qq audacity xvfb xdotool imagemagick",
         shell=True, check=True, capture_output=True, text=True,
     )
 
@@ -97,18 +97,54 @@ def _enable_scripting():
 
 def _dismiss_dialogs_for(seconds):
     """Blind-dismiss any first-run popup (e.g. 'enable this module?') by
-    pressing Return every 2s for a while — a standard trick for headless GUI
-    automation when the exact dialog can't be inspected from here."""
+    activating every window and sending Tab+Return / Space / Return every 2s
+    — a standard trick for headless GUI automation when the exact dialog
+    can't be inspected from here. Xvfb has no window manager, so a plain
+    `key` without `windowactivate` first often never reaches the dialog."""
     if not shutil.which("xdotool"):
         return
+    env = {**os.environ, "DISPLAY": DISPLAY_NUM}
     end = time.time() + seconds
     while time.time() < end:
-        subprocess.run(
-            ["xdotool", "search", "--name", "Audacity", "key", "Return"],
-            env={**os.environ, "DISPLAY": DISPLAY_NUM},
-            capture_output=True,
-        )
+        ids = subprocess.run(
+            ["xdotool", "search", "--name", "."],
+            env=env, capture_output=True, text=True,
+        ).stdout.split()
+        for wid in ids:
+            for key in ("Return", "space", "Tab Return"):
+                subprocess.run(
+                    ["xdotool", "windowactivate", "--sync", wid, "key", key],
+                    env=env, capture_output=True,
+                )
         time.sleep(2)
+
+
+def _debug_screenshot(path="audacity_debug.png"):
+    """Save a screenshot of the virtual display so a stuck/silent dialog can
+    actually be seen instead of guessed at. Returns the absolute path, or
+    None if the screenshot tool isn't available."""
+    if not shutil.which("import"):
+        return None
+    abspath = os.path.abspath(path)
+    try:
+        subprocess.run(
+            ["import", "-display", DISPLAY_NUM, "-window", "root", abspath],
+            capture_output=True, timeout=15,
+        )
+        return abspath if os.path.exists(abspath) else None
+    except Exception:
+        return None
+
+
+def _list_windows():
+    if not shutil.which("xdotool"):
+        return "(xdotool not available)"
+    env = {**os.environ, "DISPLAY": DISPLAY_NUM}
+    r = subprocess.run(
+        ["xdotool", "search", "--name", ".", "getwindowname"],
+        env=env, capture_output=True, text=True,
+    )
+    return r.stdout.strip() or "(no windows found)"
 
 
 def _ensure_xvfb():
@@ -158,12 +194,18 @@ def _ensure_running():
                 log_tail = "".join(f.readlines()[-40:])
         except Exception:
             pass
+        windows = _list_windows()
+        shot = _debug_screenshot()
         if not proc_alive:
             _state["proc"].kill()
         raise RuntimeError(
             "Audacity's scripting pipe never appeared within 90s.\n"
-            f"Process still running: {proc_alive} | installed version: {_pkg_version()}\n\n"
-            "Most likely mod-script-pipe still needs enabling by hand once inside "
+            f"Process still running: {proc_alive} | installed version: {_pkg_version()}\n"
+            f"Open windows on the virtual display: {windows}\n"
+            + (f"Screenshot saved to: {shot} — open it in Colab's file browser "
+               "(folder icon, left sidebar) and send it over.\n"
+               if shot else "Screenshot capture failed too.\n")
+            + "\nMost likely mod-script-pipe still needs enabling by hand once inside "
             "Audacity's own GUI (Edit > Preferences > Modules), or this apt version "
             "doesn't ship it. Audacity's own stdout/stderr (last 40 lines):\n\n"
             f"{log_tail or '(empty — nothing was printed)'}"
