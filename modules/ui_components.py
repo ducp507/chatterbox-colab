@@ -346,7 +346,7 @@ def create_turbo_tab():
             voice_select_turbo = gr.Dropdown(
                 label="Select Voice (Required for Turbo)",
                 choices=get_voices_for_language("en"),
-                value=f"Default ({SUPPORTED_LANGUAGES['en']})",
+                value="Male-1 ♂️",
                 info="Turbo requires a reference voice clip for cloning"
             )
             
@@ -431,6 +431,7 @@ def create_script_to_voice_tab():
             voice_select_s2v = gr.Dropdown(
                 label="Chọn giọng",
                 choices=get_voices_for_language("en"),
+                value="Male-1 ♂️",
             )
 
             master_checkbox = gr.Checkbox(
