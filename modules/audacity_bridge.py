@@ -29,8 +29,9 @@ _UID = os.getuid()
 TO_PIPE = f"/tmp/audacity_script_pipe.to.{_UID}"
 FROM_PIPE = f"/tmp/audacity_script_pipe.from.{_UID}"
 AUDACITY_CFG_DIR = os.path.expanduser("~/.audacity-data")
+DISPLAY_NUM = ":97"  # fixed, so xdotool always knows where to send keys
 
-_state = {"proc": None, "to_f": None, "from_f": None}
+_state = {"proc": None, "to_f": None, "from_f": None, "xvfb": None}
 
 # Verbatim from "Edit voice.docx" steps 4-6. The FilterCurve line is EQ.txt,
 # unchanged, since that file is already valid Audacity macro syntax.
@@ -53,32 +54,75 @@ MASTER_CHAIN = [
 ]
 
 
+LAUNCH_LOG = "/tmp/audacity_launch.log"
+
+
 def _ensure_installed():
-    if shutil.which("audacity"):
+    if shutil.which("audacity") and shutil.which("xdotool"):
         return
     subprocess.run(
-        "apt-get -qq update && apt-get install -y -qq audacity xvfb",
+        "apt-get -qq update && apt-get install -y -qq audacity xvfb xdotool",
         shell=True, check=True, capture_output=True, text=True,
     )
+
+
+def _pkg_version():
+    try:
+        out = subprocess.run(
+            "dpkg -s audacity 2>/dev/null | grep -i version",
+            shell=True, capture_output=True, text=True,
+        ).stdout.strip()
+        return out or "(dpkg -s audacity returned nothing)"
+    except Exception as e:
+        return f"(couldn't check: {e})"
 
 
 def _enable_scripting():
     """mod-script-pipe must be enabled before Audacity's first UI-less launch,
     otherwise it would need a manual click in Preferences > Modules that
-    nothing here can perform headlessly."""
-    os.makedirs(AUDACITY_CFG_DIR, exist_ok=True)
-    cfg_path = os.path.join(AUDACITY_CFG_DIR, "audacity.cfg")
-    text = open(cfg_path, encoding="utf-8").read() if os.path.exists(cfg_path) else ""
-    if "mod-script-pipe=Enabled" not in text:
-        if "[Module]" in text:
-            text = text.replace("[Module]", "[Module]\nmod-script-pipe=Enabled", 1)
-        else:
-            text += "\n[Module]\nmod-script-pipe=Enabled\n"
-        with open(cfg_path, "w", encoding="utf-8") as f:
-            f.write(text)
+    nothing here can perform headlessly. Written to both plausible config
+    locations since the exact path can vary by Audacity/distro version."""
+    for cfg_dir in (AUDACITY_CFG_DIR, os.path.expanduser("~/.config/audacity")):
+        os.makedirs(cfg_dir, exist_ok=True)
+        cfg_path = os.path.join(cfg_dir, "audacity.cfg")
+        text = open(cfg_path, encoding="utf-8").read() if os.path.exists(cfg_path) else ""
+        if "mod-script-pipe=Enabled" not in text:
+            if "[Module]" in text:
+                text = text.replace("[Module]", "[Module]\nmod-script-pipe=Enabled", 1)
+            else:
+                text += "\n[Module]\nmod-script-pipe=Enabled\n"
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                f.write(text)
 
 
-def _locate_pipes(timeout=40):
+def _dismiss_dialogs_for(seconds):
+    """Blind-dismiss any first-run popup (e.g. 'enable this module?') by
+    pressing Return every 2s for a while — a standard trick for headless GUI
+    automation when the exact dialog can't be inspected from here."""
+    if not shutil.which("xdotool"):
+        return
+    end = time.time() + seconds
+    while time.time() < end:
+        subprocess.run(
+            ["xdotool", "search", "--name", "Audacity", "key", "Return"],
+            env={**os.environ, "DISPLAY": DISPLAY_NUM},
+            capture_output=True,
+        )
+        time.sleep(2)
+
+
+def _ensure_xvfb():
+    lock = f"/tmp/.X{DISPLAY_NUM.lstrip(':')}-lock"
+    if os.path.exists(lock) and _state["xvfb"] and _state["xvfb"].poll() is None:
+        return
+    _state["xvfb"] = subprocess.Popen(
+        ["Xvfb", DISPLAY_NUM, "-screen", "0", "1280x1024x24", "-ac"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    time.sleep(2)
+
+
+def _locate_pipes(timeout=90):
     deadline = time.time() + timeout
     while time.time() < deadline:
         if os.path.exists(TO_PIPE) and os.path.exists(FROM_PIPE):
@@ -96,17 +140,33 @@ def _ensure_running():
         return
     _ensure_installed()
     _enable_scripting()
+    _ensure_xvfb()
+
+    log_f = open(LAUNCH_LOG, "w")
     _state["proc"] = subprocess.Popen(
-        ["xvfb-run", "-a", "--server-args=-screen 0 1280x1024x24", "audacity"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        ["audacity"],
+        env={**os.environ, "DISPLAY": DISPLAY_NUM},
+        stdout=log_f, stderr=subprocess.STDOUT,
     )
+    _dismiss_dialogs_for(20)  # in case a first-run "enable module?" popup appeared
     to_path, from_path = _locate_pipes()
     if not to_path:
+        proc_alive = _state["proc"].poll() is None
+        log_tail = ""
+        try:
+            with open(LAUNCH_LOG, encoding="utf-8", errors="ignore") as f:
+                log_tail = "".join(f.readlines()[-40:])
+        except Exception:
+            pass
+        if not proc_alive:
+            _state["proc"].kill()
         raise RuntimeError(
-            "Audacity's scripting pipe never appeared within 40s. Most likely "
-            "mod-script-pipe still needs enabling by hand once inside Audacity's "
-            "own GUI (Edit > Preferences > Modules) — nothing here can click that "
-            "headlessly. Screenshot this error and send it over."
+            "Audacity's scripting pipe never appeared within 90s.\n"
+            f"Process still running: {proc_alive} | installed version: {_pkg_version()}\n\n"
+            "Most likely mod-script-pipe still needs enabling by hand once inside "
+            "Audacity's own GUI (Edit > Preferences > Modules), or this apt version "
+            "doesn't ship it. Audacity's own stdout/stderr (last 40 lines):\n\n"
+            f"{log_tail or '(empty — nothing was printed)'}"
         )
     time.sleep(1.0)  # let Audacity finish settling before the first command
     _state["to_f"] = open(to_path, "w")
