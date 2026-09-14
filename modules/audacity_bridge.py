@@ -31,7 +31,7 @@ FROM_PIPE = f"/tmp/audacity_script_pipe.from.{_UID}"
 AUDACITY_CFG_DIR = os.path.expanduser("~/.audacity-data")
 DISPLAY_NUM = ":97"  # fixed, so xdotool always knows where to send keys
 
-_state = {"proc": None, "to_f": None, "from_f": None, "xvfb": None}
+_state = {"proc": None, "to_f": None, "from_f": None, "xvfb": None, "wm": None}
 
 # Verbatim from "Edit voice.docx" steps 4-6. The FilterCurve line is EQ.txt,
 # unchanged, since that file is already valid Audacity macro syntax.
@@ -58,10 +58,11 @@ LAUNCH_LOG = "/tmp/audacity_launch.log"
 
 
 def _ensure_installed():
-    if shutil.which("audacity") and shutil.which("xdotool") and shutil.which("import"):
+    if (shutil.which("audacity") and shutil.which("xdotool")
+            and shutil.which("import") and shutil.which("fluxbox")):
         return
     subprocess.run(
-        "apt-get -qq update && apt-get install -y -qq audacity xvfb xdotool imagemagick",
+        "apt-get -qq update && apt-get install -y -qq audacity xvfb xdotool imagemagick fluxbox",
         shell=True, check=True, capture_output=True, text=True,
     )
 
@@ -168,13 +169,26 @@ def _list_windows():
 
 def _ensure_xvfb():
     lock = f"/tmp/.X{DISPLAY_NUM.lstrip(':')}-lock"
-    if os.path.exists(lock) and _state["xvfb"] and _state["xvfb"].poll() is None:
-        return
-    _state["xvfb"] = subprocess.Popen(
-        ["Xvfb", DISPLAY_NUM, "-screen", "0", "1280x1024x24", "-ac"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    time.sleep(2)
+    already_up = os.path.exists(lock) and _state["xvfb"] and _state["xvfb"].poll() is None
+    if not already_up:
+        _state["xvfb"] = subprocess.Popen(
+            ["Xvfb", DISPLAY_NUM, "-screen", "0", "1280x1024x24", "-ac"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        time.sleep(2)
+
+    # A bare Xvfb has NO window manager, which makes `xdotool windowactivate`
+    # (and therefore every attempt to click/key through a popup dialog)
+    # unreliable -- activation requests have nothing to honor them. Run a
+    # minimal WM so dialog-dismissal actually works.
+    wm_alive = _state.get("wm") and _state["wm"].poll() is None
+    if not wm_alive:
+        _state["wm"] = subprocess.Popen(
+            ["fluxbox"],
+            env={**os.environ, "DISPLAY": DISPLAY_NUM},
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        time.sleep(1.5)
 
 
 def _locate_pipes(timeout=90):
