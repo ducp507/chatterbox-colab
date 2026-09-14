@@ -190,10 +190,33 @@ def _locate_pipes(timeout=90):
     return None, None
 
 
+def _reset_profile():
+    """Wipe Audacity's own profile/session dirs before every launch.
+
+    A screenshot of a stuck run showed the actual cause of every timeout so
+    far: Audacity's "Recover unsaved projects?" modal, left over from a
+    PRIOR run that got killed mid-launch (by this bridge's own timeout
+    handling) instead of exiting cleanly. That dialog blocks everything —
+    no console output, no scripting pipe, indefinitely — until someone
+    clicks through it. Since this bridge only ever drives Audacity
+    programmatically and never wants "recover my last session" behaviour,
+    starting from a clean profile every time removes the dialog's cause
+    entirely instead of trying to click past it."""
+    import shutil as _shutil
+    for d in (
+        AUDACITY_CFG_DIR,
+        os.path.expanduser("~/.config/audacity"),
+        os.path.expanduser("~/.local/share/audacity"),
+        os.path.expanduser("~/.cache/audacity"),
+    ):
+        _shutil.rmtree(d, ignore_errors=True)
+
+
 def _ensure_running():
     if _state["to_f"] and _state["proc"] and _state["proc"].poll() is None:
         return
     _ensure_installed()
+    _reset_profile()
     _enable_scripting()
     _ensure_xvfb()
 
