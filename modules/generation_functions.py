@@ -572,18 +572,11 @@ def generate_script_to_voice(full_script, script_file, voice_name, pause_ms, max
             yield 100, (sr, full_wav.squeeze(0).numpy()), status
             return
 
-        yield 78, None, "Mastering with real Audacity (Compressor → Normalize → EQ)... first run this session installs Audacity (~1 min)"
-        import soundfile as sf
-        import tempfile
-        from . import audacity_bridge
-
-        tmp_dir = tempfile.mkdtemp(prefix="chatterbox_master_")
-        in_path = os.path.join(tmp_dir, "merged.wav")
-        out_path = os.path.join(tmp_dir, "mastered.wav")
-        sf.write(in_path, full_wav.squeeze(0).numpy(), sr)
+        yield 78, None, "Mastering (Compressor → Normalize → EQ)..."
+        from . import audio_mastering
 
         try:
-            audacity_bridge.apply_master_chain(in_path, out_path)
+            mastered_wav = audio_mastering.apply_master_chain(full_wav.squeeze(0).numpy(), sr)
         except Exception as e:
             total_time = time.time() - start_time
             status = (
@@ -593,14 +586,13 @@ def generate_script_to_voice(full_script, script_file, voice_name, pause_ms, max
             yield 100, (sr, full_wav.squeeze(0).numpy()), status
             return
 
-        mastered_wav, mastered_sr = sf.read(out_path, dtype="float32")
         total_time = time.time() - start_time
         status = (
-            f"✅ Generation + real-Audacity mastering complete!\n"
+            f"✅ Generation + mastering complete!\n"
             f"{total} segments | {format_time(total_time)}\n"
             f"Chain: Compressor(-15dB, 2:1) → Normalize(-1dB) → Filter Curve EQ"
         )
-        yield 100, (mastered_sr, mastered_wav), status
+        yield 100, (sr, mastered_wav), status
 
     except Exception as e:
         yield 0, None, f"❌ Error: {str(e)}"

@@ -396,14 +396,14 @@ def create_turbo_tab():
 
 def create_script_to_voice_tab():
     """Create the UI for the full pipeline: paste a raw script -> auto-split
-    -> Turbo voice per segment -> merge -> master with the real Audacity
-    engine (Compressor -> Normalize -> Filter Curve EQ, per Edit voice.docx)."""
+    -> Turbo voice per segment -> merge -> master (Compressor -> Normalize ->
+    Filter Curve EQ, per Edit voice.docx, computed natively in numpy/scipy)."""
     with gr.Row():
         with gr.Column():
             gr.Markdown("""
             ### 🎬 Script to Voice
             Dán **nguyên kịch bản** (chưa cần tách dòng) — tool tự tách theo câu,
-            tự tạo giọng từng đoạn, tự nối lại, và tự chuẩn hoá bằng **Audacity thật**
+            tự tạo giọng từng đoạn, tự nối lại, và tự chuẩn hoá
             (đúng chain Compressor → Normalize → EQ, cùng thông số Anh Tấn dùng).
             """)
 
@@ -435,9 +435,9 @@ def create_script_to_voice_tab():
             )
 
             master_checkbox = gr.Checkbox(
-                label="Chuẩn hoá bằng Audacity thật (Compressor → Normalize → EQ)",
+                label="Chuẩn hoá giọng (Compressor → Normalize → EQ)",
                 value=True,
-                info="Lần đầu trong phiên Colab sẽ mất thêm ~1 phút để cài Audacity headless"
+                info="Chạy ngay, không cần cài đặt gì thêm"
             )
 
             generate_btn_s2v = gr.Button("🎬 Generate Script to Voice", variant="primary", size="lg")
@@ -451,7 +451,7 @@ def create_script_to_voice_tab():
             ### 💡 Notes
             - Xuống dòng có sẵn trong script = ranh giới cứng, không bị gộp lại; đoạn nào
               dài hơn giới hạn ký tự mới tự tách tiếp theo câu/dấu phẩy (giống Script Splitter).
-            - Tắt ô "Chuẩn hoá bằng Audacity" để nghe bản giọng thô trước, so sánh sau.
+            - Tắt ô "Chuẩn hoá giọng" để nghe bản giọng thô trước, so sánh sau.
             - Nếu bước mastering lỗi, tool trả về bản giọng thô kèm lỗi chi tiết trong Status
               (dán lỗi đó lại để vá tiếp).
             """)

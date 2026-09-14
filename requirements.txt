@@ -13,3 +13,4 @@ gradio==5.44.1
 pyloudnorm
 omegaconf
 openpyxl
+scipy
