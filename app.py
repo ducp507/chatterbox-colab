@@ -32,6 +32,8 @@ from modules.generation_functions import (
     generate_script_to_voice
 )
 from modules.scene_prompts import generate_scene_prompts
+from modules.scene_voice import generate_scene_voice
+from modules.watermark_remover import remove_watermark_batch, preview_watermark_mask
 
 # Import UI components
 from modules.ui_components import (
@@ -42,7 +44,9 @@ from modules.ui_components import (
     create_clone_voice_tab,
     create_turbo_tab,
     create_script_to_voice_tab,
-    create_script_to_prompts_tab
+    create_script_to_prompts_tab,
+    create_scene_voice_tab,
+    create_watermark_removal_tab
 )
 
 # Load voices at startup
@@ -111,6 +115,12 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
 
     with gr.Tab("🖼️ Script to Prompts"):
         prompts_components = create_script_to_prompts_tab()
+
+    with gr.Tab("🎬 Scene Voice"):
+        scene_voice_components = create_scene_voice_tab()
+
+    with gr.Tab("🧹 Xoá Watermark"):
+        watermark_components = create_watermark_removal_tab()
 
     # ---------------------------
     # Event Handlers - TTS Tab
@@ -386,6 +396,59 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
             prompts_components['progress_bar'],
             prompts_components['status_box'],
             prompts_components['prompts_file']
+        ]
+    )
+
+    # ---------------------------
+    # Event Handlers - Scene Voice Tab
+    # ---------------------------
+    scene_voice_components['generate_btn'].click(
+        fn=generate_scene_voice,
+        inputs=[
+            scene_voice_components['master_text'],
+            scene_voice_components['master_file'],
+            scene_voice_components['voice_select'],
+            scene_voice_components['pause_slider'],
+            scene_voice_components['master_checkbox']
+        ],
+        outputs=[
+            scene_voice_components['progress_bar'],
+            scene_voice_components['status_box'],
+            scene_voice_components['audio_output'],
+            scene_voice_components['timing_file'],
+            scene_voice_components['clips_zip']
+        ]
+    )
+
+    # ---------------------------
+    # Event Handlers - Xoá Watermark Tab
+    # ---------------------------
+    watermark_components['preview_btn'].click(
+        fn=preview_watermark_mask,
+        inputs=[
+            watermark_components['files_input'],
+            watermark_components['right_margin'],
+            watermark_components['bottom_margin'],
+            watermark_components['box_w'],
+            watermark_components['box_h']
+        ],
+        outputs=[watermark_components['preview_image']]
+    )
+
+    watermark_components['remove_btn'].click(
+        fn=remove_watermark_batch,
+        inputs=[
+            watermark_components['files_input'],
+            watermark_components['right_margin'],
+            watermark_components['bottom_margin'],
+            watermark_components['box_w'],
+            watermark_components['box_h']
+        ],
+        outputs=[
+            watermark_components['progress_bar'],
+            watermark_components['status_box'],
+            watermark_components['result_gallery'],
+            watermark_components['zip_output']
         ]
     )
 

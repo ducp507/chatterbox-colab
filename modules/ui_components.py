@@ -542,3 +542,132 @@ def create_script_to_prompts_tab():
         "status_box": status_box_prompts,
         "prompts_file": prompts_file_output,
     }
+
+
+def create_scene_voice_tab():
+    """Tạo voice CHÍNH XÁC theo từng scene từ file master.md (xem memory
+    step2-script-prompt-authoring) -- mỗi scene 1 lần gọi TTS riêng, biết
+    chính xác tuyệt đối mốc [start,end] của scene đó trong file voice ghép,
+    không cần Whisper/đoán tỉ lệ ở bước ghép CapCut sau này."""
+    with gr.Row():
+        with gr.Column():
+            gr.Markdown("""
+            ### 🎬 Scene Voice (từ master.md)
+            Tạo voice riêng từng scene theo đúng cấu trúc `[Scene N] Script: ...`
+            trong file master.md (gồm cả Intro/Outro) — biết chính xác mốc
+            giờ từng scene trong voice ghép, để ghép CapCut không cần
+            đoán/align lại nữa.
+            """)
+
+            sv_master_text = gr.Textbox(
+                label="Nội dung master.md",
+                lines=10,
+                placeholder="[Scene 0 — INTRO]\nScript: ...\nPrompt: (no image needed)\n\n[Scene 1]\nScript: ...\nPrompt: ...",
+            )
+            sv_master_file = gr.File(label="...hoặc upload file master.md", file_types=[".md", ".txt"])
+
+            sv_voice_select = gr.Dropdown(label="Giọng đọc", choices=get_voices_for_language("en"))
+            with gr.Row():
+                sv_pause_slider = gr.Slider(label="Khoảng lặng giữa scene (ms)", minimum=0, maximum=1000, value=300, step=50)
+                sv_master_checkbox = gr.Checkbox(label="Master âm thanh (Compressor→Normalize→EQ)", value=True)
+
+            sv_generate_btn = gr.Button("🎬 Generate Scene Voice", variant="primary", size="lg")
+
+        with gr.Column():
+            sv_progress_bar = gr.Slider(label="Progress", minimum=0, maximum=100, value=0, interactive=False)
+            sv_status_box = gr.Textbox(label="Trạng thái", value="Sẵn sàng...", lines=6, interactive=False)
+            sv_audio_output = gr.Audio(label="Voice đã ghép")
+            sv_timing_file = gr.File(label="Tải bảng mốc giờ từng scene (.csv)")
+            sv_clips_zip = gr.File(label="Tải zip từng clip scene riêng (sửa lại 1 scene sau này không cần tạo lại hết)")
+
+            gr.Markdown("""
+            ### 💡 Notes
+            - Mỗi scene = 1 lần gọi TTS riêng (không gộp theo max_chars) —
+              chậm hơn 1 chút so với Script to Voice nhưng đổi lại biết
+              chính xác tuyệt đối mốc giờ từng scene, không cần đoán.
+            - Intro/Outro vẫn có giọng đọc bình thường (chỉ không có ảnh).
+            - Bảng .csv (scene, tag, label, start, end, duration) dùng thẳng
+              cho bước ghép project CapCut.
+            """)
+
+    return {
+        "master_text": sv_master_text,
+        "master_file": sv_master_file,
+        "voice_select": sv_voice_select,
+        "pause_slider": sv_pause_slider,
+        "master_checkbox": sv_master_checkbox,
+        "generate_btn": sv_generate_btn,
+        "progress_bar": sv_progress_bar,
+        "status_box": sv_status_box,
+        "audio_output": sv_audio_output,
+        "timing_file": sv_timing_file,
+        "clips_zip": sv_clips_zip,
+    }
+
+
+def create_watermark_removal_tab():
+    """Xoá watermark Google Flow (icon sparkle cố định góc dưới-phải) hàng
+    loạt bằng LaMa inpainting. Không dùng AI detect vị trí -- vùng xoá là
+    1 khung cố định vì Flow luôn in watermark ở đúng chỗ đó."""
+    with gr.Row():
+        with gr.Column():
+            gr.Markdown("""
+            ### 🧹 Xoá Watermark (Google Flow)
+            Xoá icon sparkle watermark ở góc dưới-phải ảnh Flow, hàng loạt.
+            Vùng xoá là khung cố định (không detect bằng AI), nên bấm
+            **"Xem trước"** để kiểm tra khung đỏ trùng đúng watermark trước
+            khi chạy cả lô.
+            """)
+
+            wm_files_input = gr.File(
+                label="Chọn ảnh cần xoá watermark (chọn nhiều file cùng lúc)",
+                file_count="multiple",
+                file_types=["image"],
+            )
+
+            with gr.Row():
+                wm_right_margin = gr.Number(label="Cách mép phải (px)", value=65, precision=0)
+                wm_bottom_margin = gr.Number(label="Cách mép dưới (px)", value=60, precision=0)
+            with gr.Row():
+                wm_box_w = gr.Number(label="Chiều rộng vùng xoá (px)", value=70, precision=0)
+                wm_box_h = gr.Number(label="Chiều cao vùng xoá (px)", value=75, precision=0)
+            gr.Markdown(
+                "_Toạ độ mặc định đo trên ảnh Flow chuẩn 1376×768 — tự scale "
+                "theo độ phân giải ảnh thật. Chỉnh 4 số trên nếu khung đỏ "
+                "chưa trùng khít watermark._"
+            )
+
+            wm_preview_btn = gr.Button("👁️ Xem trước khung xoá (ảnh đầu tiên)")
+            wm_remove_btn = gr.Button("🧹 Xoá Watermark Hàng Loạt", variant="primary", size="lg")
+
+        with gr.Column():
+            wm_preview_image = gr.Image(label="Xem trước khung xoá (viền đỏ)", type="pil")
+            wm_progress_bar = gr.Slider(label="Progress", minimum=0, maximum=100, value=0, interactive=False)
+            wm_status_box = gr.Textbox(label="Trạng thái", value="Sẵn sàng...", lines=4, interactive=False)
+            wm_result_gallery = gr.Gallery(label="Kết quả (xem nhanh vài ảnh đầu)", columns=3)
+            wm_zip_output = gr.File(label="Tải file .zip toàn bộ ảnh đã xoá watermark")
+
+            gr.Markdown("""
+            ### 💡 Notes
+            - Model LaMa (~200MB) tự tải lần đầu chạy, cache lại cho các lần sau.
+            - Watermark Flow luôn cùng 1 vị trí/kích thước trên ảnh xuất chuẩn
+              1376×768, nên không cần AI detect vị trí — chỉ cần đúng toạ độ
+              khung là đủ, nhanh và ổn định hơn nhiều so với model detect.
+            - Xử lý tuần tự từng ảnh; dùng GPU (Colab) sẽ nhanh hơn nhiều so
+              với CPU.
+            """)
+
+    return {
+        "files_input": wm_files_input,
+        "right_margin": wm_right_margin,
+        "bottom_margin": wm_bottom_margin,
+        "box_w": wm_box_w,
+        "box_h": wm_box_h,
+        "preview_btn": wm_preview_btn,
+        "preview_image": wm_preview_image,
+        "remove_btn": wm_remove_btn,
+        "progress_bar": wm_progress_bar,
+        "status_box": wm_status_box,
+        "result_gallery": wm_result_gallery,
+        "zip_output": wm_zip_output,
+    }
