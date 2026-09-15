@@ -29,9 +29,7 @@ from modules.generation_functions import (
     generate_multilingual_speech,
     convert_voice,
     generate_turbo_speech,
-    generate_script_to_voice
 )
-from modules.scene_prompts import generate_scene_prompts
 from modules.scene_voice import generate_scene_voice
 from modules.watermark_remover import remove_watermark_batch, preview_watermark_mask
 
@@ -43,8 +41,6 @@ from modules.ui_components import (
     create_voice_conversion_tab,
     create_clone_voice_tab,
     create_turbo_tab,
-    create_script_to_voice_tab,
-    create_script_to_prompts_tab,
     create_scene_voice_tab,
     create_watermark_removal_tab
 )
@@ -98,23 +94,20 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
     with gr.Tab("⚡ Turbo TTS"):
         turbo_components = create_turbo_tab()
 
-    with gr.Tab("🎤 TTS Main (English)"):
+    # TTS Main / Multilingual: chưa xoá code (create_tts_tab/create_multilingual_tab vẫn
+    # còn nguyên trong ui_components.py) -- chỉ ẩn khỏi giao diện theo yêu cầu, bật lại
+    # sau này chỉ cần đổi 2 gr.Column(visible=False) này thành gr.Tab(...) như cũ.
+    with gr.Column(visible=False):
         tts_components = create_tts_tab()
-    
-    with gr.Tab("🌍 Multilingual TTS"):
+
+    with gr.Column(visible=False):
         mtl_components = create_multilingual_tab()
-    
+
     with gr.Tab("🔄 Voice Conversion"):
         vc_components = create_voice_conversion_tab()
-    
+
     with gr.Tab("🧬 Clone Voice"):
         clone_components = create_clone_voice_tab()
-
-    with gr.Tab("🎬 Script to Voice"):
-        script_components = create_script_to_voice_tab()
-
-    with gr.Tab("🖼️ Script to Prompts"):
-        prompts_components = create_script_to_prompts_tab()
 
     with gr.Tab("🎬 Scene Voice"):
         scene_voice_components = create_scene_voice_tab()
@@ -361,45 +354,6 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
     )
 
     # ---------------------------
-    # Event Handlers - Script to Voice Tab
-    # ---------------------------
-    script_components['generate_btn'].click(
-        fn=generate_script_to_voice,
-        inputs=[
-            script_components['script_text'],
-            script_components['script_file'],
-            script_components['voice_select'],
-            script_components['pause_slider'],
-            script_components['max_chars'],
-            script_components['master_checkbox']
-        ],
-        outputs=[
-            script_components['progress_bar'],
-            script_components['audio_output'],
-            script_components['status_box']
-        ]
-    )
-
-    # ---------------------------
-    # Event Handlers - Script to Prompts Tab
-    # ---------------------------
-    prompts_components['generate_btn'].click(
-        fn=generate_scene_prompts,
-        inputs=[
-            prompts_components['script_text'],
-            prompts_components['script_file'],
-            prompts_components['video_length'],
-            prompts_components['num_scenes'],
-            prompts_components['api_key']
-        ],
-        outputs=[
-            prompts_components['progress_bar'],
-            prompts_components['status_box'],
-            prompts_components['prompts_file']
-        ]
-    )
-
-    # ---------------------------
     # Event Handlers - Scene Voice Tab
     # ---------------------------
     scene_voice_components['generate_btn'].click(
@@ -472,9 +426,6 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
         fn=lambda: gr.update(choices=get_voices_for_language("en")),
         outputs=[turbo_components['voice_select']]
     ).then(
-        fn=lambda: gr.update(choices=get_voices_for_language("en")),
-        outputs=[script_components['voice_select']]
-    ).then(
         fn=lambda lang: gr.update(choices=get_voices_for_language(lang)),
         inputs=[mtl_components['language_select']],
         outputs=[mtl_components['voice_select']]
@@ -488,7 +439,7 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
         fn=lambda: gr.update(choices=["None"] + get_all_voices_with_gender(), value="None"),
         outputs=[clone_components['voice_to_delete']]
     )
-    
+
     # Delete voice functionality in Clone Voice tab
     clone_components['delete_btn'].click(
         fn=delete_voice,
@@ -500,9 +451,6 @@ with gr.Blocks(title="Chatterbox TTS Enhanced", theme=gr.themes.Soft(), css=CUST
     ).then(
         fn=lambda: gr.update(choices=get_voices_for_language("en")),
         outputs=[turbo_components['voice_select']]
-    ).then(
-        fn=lambda: gr.update(choices=get_voices_for_language("en")),
-        outputs=[script_components['voice_select']]
     ).then(
         fn=lambda lang: gr.update(choices=get_voices_for_language(lang)),
         inputs=[mtl_components['language_select']],

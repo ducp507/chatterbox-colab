@@ -2,7 +2,7 @@
 Generate voice PER SCENE from a structured master.md (Script+Prompt written
 together per scene -- see memory step2-script-prompt-authoring / repo
 docs/master-format) instead of blindly splitting the whole script by
-max_chars like generate_script_to_voice does.
+max_chars (the old "Script to Voice" tab's approach, since removed).
 
 Why: max_chars-splitting has no relationship to the scene boundaries used
 for the per-scene image prompts, so there's no way to know afterwards which
